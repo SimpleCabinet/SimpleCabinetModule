@@ -2,9 +2,11 @@ plugins {
     id 'java'
 }
 
+sourceCompatibility = '17'
+targetCompatibility = '17'
 group 'pro.gravit.launchermodules'
 version '1.0-SNAPSHOT'
-def mainClassName = "pro.gravit.launchermodules.example.ExampleModule" // Please change it
+def mainClassName = "pro.gravit.launchermodules.simplecabinet.SimpleCabinetModule" // Please change it
 
 repositories {
     maven {
@@ -18,11 +20,12 @@ jar {
 }
 
 dependencies {
-    implementation "pro.gravit.launcher:launcher-core:5.2.0"
-    implementation "pro.gravit.launcher:launcher-ws-api:5.2.0"
-    implementation "pro.gravit.launcher:launchserver-api:5.2.0"
+    implementation "pro.gravit.launcher:launcher-core:5.2.3-SNAPSHOT"
+    implementation "pro.gravit.launcher:launcher-ws-api:5.2.3-SNAPSHOT"
+    implementation "pro.gravit.launcher:launchserver-api:5.2.3-SNAPSHOT"
     implementation 'com.google.code.gson:gson:2.8.6'
     implementation 'org.apache.logging.log4j:log4j-core:2.14.1'
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.2'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
