@@ -12,6 +12,7 @@ import pro.gravit.launcher.Launcher;
 import pro.gravit.launcher.profiles.Texture;
 import pro.gravit.launcher.request.auth.AuthRequest;
 import pro.gravit.launcher.request.auth.password.AuthPlainPassword;
+import pro.gravit.launchermodules.simplecabinet.SimpleCabinetRequester;
 import pro.gravit.launchserver.LaunchServer;
 import pro.gravit.launchserver.auth.AuthException;
 import pro.gravit.launchserver.auth.core.AuthCoreProvider;
@@ -43,34 +44,14 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     public String baseUrl;
     public String adminJwtToken;
     public String jwtPublicKeyPath;
-    private transient final HttpClient httpClient = HttpClient.newBuilder().build();
     private transient JwtParser parser;
     private transient final Logger logger = LogManager.getLogger();
     private transient ECPublicKey jwtPublicKey;
-
-    private static class SimpleCabinetErrorHandler<T> implements HttpHelper.HttpJsonErrorHandler<T, SimpleCabinetError> {
-        private final Type type;
-
-        private SimpleCabinetErrorHandler(Type type) {
-            this.type = type;
-        }
-
-        @Override
-        public HttpHelper.HttpOptional<T, SimpleCabinetError> applyJson(JsonElement response, int statusCode) {
-            if(statusCode < 200 || statusCode >= 300) {
-                return new HttpHelper.HttpOptional<>(null, Launcher.gsonManager.gson.fromJson(response, SimpleCabinetError.class), statusCode);
-            }
-            return new HttpHelper.HttpOptional<>(Launcher.gsonManager.gson.fromJson(response, type), null, statusCode);
-        }
-    }
-
-    private<T> SimpleCabinetErrorHandler<T> makeEH(Class<T> clazz) {
-        return new SimpleCabinetErrorHandler<>(clazz);
-    }
+    private transient SimpleCabinetRequester request;
 
     public SimpleCabinetUser getUserById(long id) {
         try {
-            return HttpHelper.send(httpClient, get(String.format("/users/id/%d", id), null), makeEH(SimpleCabinetUser.class)).getOrThrow();
+            return request.send(request.get(String.format("/users/id/%d", id), null), SimpleCabinetUser.class).getOrThrow();
         } catch (IOException e) {
             logger.error("getUserById", e);
             return null;
@@ -84,7 +65,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     @Override
     public User getUserByUsername(String username) {
         try {
-            return HttpHelper.send(httpClient, get(String.format("/users/name/%s", urlEncode(username)), null), makeEH(SimpleCabinetUser.class)).getOrThrow();
+            return request.send(request.get(String.format("/users/name/%s", urlEncode(username)), null), SimpleCabinetUser.class).getOrThrow();
         } catch (IOException e) {
             logger.error("getUserById", e);
             return null;
@@ -94,7 +75,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     @Override
     public User getUserByUUID(UUID uuid) {
         try {
-            return HttpHelper.send(httpClient, get(String.format("/users/uuid/%s", uuid.toString()), null), makeEH(SimpleCabinetUser.class)).getOrThrow();
+            return request.send(request.get(String.format("/users/uuid/%s", uuid.toString()), null), SimpleCabinetUser.class).getOrThrow();
         } catch (IOException e) {
             logger.error("getUserById", e);
             return null;
@@ -120,7 +101,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     @Override
     public AuthManager.AuthReport refreshAccessToken(String refreshToken, AuthResponse.AuthContext context) {
         try {
-            var result = HttpHelper.send(httpClient, post("/auth/refresh", new RefreshTokenRequest(refreshToken), null), makeEH(CabinetTokenResponse.class));
+            var result = request.send(request.post("/auth/refresh", new RefreshTokenRequest(refreshToken), null), CabinetTokenResponse.class);
             if(result.isSuccessful()) {
                 var data = result.result();
                 return AuthManager.AuthReport.ofOAuth(data.accessToken, data.refreshToken, data.expire);
@@ -140,7 +121,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     public PasswordVerifyReport verifyPassword(User user, AuthRequest.AuthPasswordInterface password) {
         var request = new CabinetAuthRequest(user.getUsername(), ((AuthPlainPassword)password).password);
         try {
-            var result = HttpHelper.send(httpClient, post("/auth/authorize", request, null), makeEH(CabinetTokenResponse.class));
+            var result = this.request.send(this.request.post("/auth/authorize", request, null), CabinetTokenResponse.class);
             if(result.isSuccessful()) {
                 var data = result.result();
                 return new CabinetPasswordVerifyReport(data.accessToken, data.refreshToken, data.expire);
@@ -171,6 +152,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     @Override
     public void init(LaunchServer server) {
         try {
+            request = new SimpleCabinetRequester(baseUrl);
             jwtPublicKey = SecurityHelper.toPublicECDSAKey(IOHelper.read(Paths.get(jwtPublicKeyPath)));
         } catch (InvalidKeySpecException | IOException e) {
             throw new RuntimeException(e);
@@ -183,7 +165,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
 
     @Override
     public User checkServer(Client client, String username, String serverID) throws IOException {
-        return HttpHelper.send(httpClient, post("/admin/server/checkserver", new CabinetCheckServerRequest(username, serverID), adminJwtToken), makeEH(SimpleCabinetUser.class)).getOrThrow();
+        return request.send(request.post("/admin/server/checkserver", new CabinetCheckServerRequest(username, serverID), adminJwtToken), SimpleCabinetUser.class).getOrThrow();
     }
 
     @Override
@@ -192,7 +174,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
         if(!user.getUsername().equals(username)) {
             return false;
         }
-        var result = HttpHelper.send(httpClient, post("/admin/server/joinserver", new CabinetJoinServerRequest(client.sessionObject.getID(), serverID), adminJwtToken), makeEH(CabinetJoinServerResponse.class)).getOrThrow();
+        var result = request.send(request.post("/admin/server/joinserver", new CabinetJoinServerRequest(client.sessionObject.getID(), serverID), adminJwtToken), CabinetJoinServerResponse.class).getOrThrow();
         return result.success;
     }
 
@@ -282,6 +264,8 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     public record RefreshTokenRequest(String refreshToken) {
     }
 
+
+
     @SuppressWarnings("unchecked")
     public CabinetUserDetails getDetailsFromToken(String token) throws ExpiredJwtException {
         Claims claims = parser
@@ -292,56 +276,6 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
         long sessionId = (long)(double) claims.get("sessionId", Double.class);
         var expire = claims.getExpiration();
         return new CabinetUserDetails(userId, claims.getSubject(), roles, client, sessionId, expire == null ? 0 : expire.toInstant().toEpochMilli());
-    }
-
-
-    private<T> HttpRequest get(String url, String token) {
-        try {
-            var requestBuilder = HttpRequest.newBuilder()
-                    .method("GET", HttpRequest.BodyPublishers.noBody())
-                    .uri(new URI(baseUrl.concat(url)))
-                    .header("Content-Type", "application/json; charset=UTF-8")
-                    .header("Accept", "application/json")
-                    .timeout(Duration.ofMillis(10000));
-            if(token != null) {
-                requestBuilder.header("Authorization", "Bearer ".concat(token));
-            }
-            return requestBuilder.build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private<T> HttpRequest post(String url, T request, String token) {
-        try {
-            var requestBuilder = HttpRequest.newBuilder()
-                    .method("POST", HttpRequest.BodyPublishers.ofString(Launcher.gsonManager.gson.toJson(request)))
-                    .uri(new URI(baseUrl.concat(url)))
-                    .header("Content-Type", "application/json; charset=UTF-8")
-                    .header("Accept", "application/json")
-                    .timeout(Duration.ofMillis(10000));
-            if(token != null) {
-                requestBuilder.header("Authorization", "Bearer ".concat(token));
-            }
-            return requestBuilder.build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static class SimpleCabinetError {
-        public String error;
-
-        public SimpleCabinetError(String error) {
-            this.error = error;
-        }
-
-        @Override
-        public String toString() {
-            return "SimpleCabinetError{" +
-                    "error='" + error + '\'' +
-                    '}';
-        }
     }
 
     public static class SimpleCabinetUser implements User, UserSupportTextures {

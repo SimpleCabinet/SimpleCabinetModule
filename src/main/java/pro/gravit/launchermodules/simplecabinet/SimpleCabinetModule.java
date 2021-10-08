@@ -7,9 +7,15 @@ import pro.gravit.launcher.modules.LauncherModule;
 import pro.gravit.launcher.modules.LauncherModuleInfo;
 import pro.gravit.launcher.modules.events.PreGsonPhase;
 import pro.gravit.launchermodules.simplecabinet.auth.SimpleCabinetAuthCoreProvider;
+import pro.gravit.launchermodules.simplecabinet.commands.SimpleCabinetCommand;
+import pro.gravit.launchserver.auth.AuthProviderPair;
 import pro.gravit.launchserver.auth.core.AuthCoreProvider;
 import pro.gravit.launchserver.modules.events.LaunchServerFullInitEvent;
 import pro.gravit.utils.Version;
+import pro.gravit.utils.helper.IOHelper;
+
+import java.io.IOException;
+import java.nio.file.Path;
 
 /*
   Please change package and class name for you!
@@ -21,6 +27,16 @@ public class SimpleCabinetModule extends LauncherModule {
         super( new LauncherModuleInfo("SimpleCabinetModule", Version.of(1,0,0), new String[]{ "LaunchServerCore" }) );
     }
 
+    public Path getDefaultJwtTokenPath(AuthProviderPair pair) {
+        Path path = modulesConfigManager.getModuleConfigDir(moduleInfo.name).resolve(String.format("%s.jwt.key", pair.name));
+        try {
+            IOHelper.createParentDirs(path);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return path;
+    }
+
     @Override
     public void init(LauncherInitContext initContext) {
         registerEvent(this::preConfigGson, PreGsonPhase.class);
@@ -28,7 +44,7 @@ public class SimpleCabinetModule extends LauncherModule {
     }
 
     public void finish(LaunchServerFullInitEvent event) {
-        logger.info("Hello World!");
+        event.server.commandHandler.registerCommand("cabinet", new SimpleCabinetCommand(event.server, this));
     }
 
     public void preConfigGson(PreGsonPhase preGsonPhase) {
