@@ -15,12 +15,12 @@ public class SimpleCabinetCommand extends Command {
 
     @Override
     public String getArgsDescription() {
-        return null;
+        return "[subcommand] [args]";
     }
 
     @Override
     public String getUsageDescription() {
-        return null;
+        return "SimpleCabinet manager";
     }
 
     @Override

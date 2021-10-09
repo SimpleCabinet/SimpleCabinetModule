@@ -24,12 +24,12 @@ public class InstallCommand extends Command {
 
     @Override
     public String getArgsDescription() {
-        return "install SimpleCabinet";
+        return "[url] [token] (authId)";
     }
 
     @Override
     public String getUsageDescription() {
-        return "[url] [token] (authId)";
+        return "install SimpleCabinet";
     }
 
     @Override
@@ -64,9 +64,11 @@ public class InstallCommand extends Command {
         pair.core.close();
         pair.core = core;
         pair.textureProvider = null;
+        server.launchServerConfigManager.writeConfig(server.config);
         logger.info("SimpleCabinet installed");
     }
 
-    public static record PublicStatusInfo(String jwtPublicKey) {
+    public static class PublicStatusInfo {
+        public String jwtPublicKey;
     }
 }
