@@ -79,6 +79,7 @@ public class SimpleCabinetRequester {
 
     public static class SimpleCabinetError {
         public String error;
+        public int code;
 
         public SimpleCabinetError(String error) {
             this.error = error;
@@ -88,6 +89,7 @@ public class SimpleCabinetRequester {
         public String toString() {
             return "SimpleCabinetError{" +
                     "error='" + error + '\'' +
+                    ", code=" + code +
                     '}';
         }
     }

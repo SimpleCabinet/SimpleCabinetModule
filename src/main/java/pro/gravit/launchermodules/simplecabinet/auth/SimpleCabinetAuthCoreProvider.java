@@ -9,9 +9,14 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pro.gravit.launcher.ClientPermissions;
 import pro.gravit.launcher.Launcher;
+import pro.gravit.launcher.events.request.GetAvailabilityAuthRequestEvent;
 import pro.gravit.launcher.profiles.Texture;
 import pro.gravit.launcher.request.auth.AuthRequest;
+import pro.gravit.launcher.request.auth.details.AuthPasswordDetails;
+import pro.gravit.launcher.request.auth.details.AuthTotpDetails;
+import pro.gravit.launcher.request.auth.password.Auth2FAPassword;
 import pro.gravit.launcher.request.auth.password.AuthPlainPassword;
+import pro.gravit.launcher.request.auth.password.AuthTOTPPassword;
 import pro.gravit.launchermodules.simplecabinet.SimpleCabinetRequester;
 import pro.gravit.launchserver.LaunchServer;
 import pro.gravit.launchserver.auth.AuthException;
@@ -56,6 +61,11 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
             logger.error("getUserById", e);
             return null;
         }
+    }
+
+    @Override
+    public List<GetAvailabilityAuthRequestEvent.AuthAvailabilityDetails> getDetails(Client client) {
+        return List.of(new AuthPasswordDetails(), new AuthTotpDetails("TOTP", 6));
     }
 
     private String urlEncode(String string) {
@@ -104,7 +114,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
             var result = request.send(request.post("/auth/refresh", new RefreshTokenRequest(refreshToken), null), CabinetTokenResponse.class);
             if(result.isSuccessful()) {
                 var data = result.result();
-                return AuthManager.AuthReport.ofOAuth(data.accessToken, data.refreshToken, data.expire);
+                return AuthManager.AuthReport.ofOAuth(data.accessToken, data.refreshToken, data.expire, null);
             }
         } catch (IOException e) {
             logger.error("refreshAccessToken", e);
@@ -113,40 +123,37 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
     }
 
     @Override
-    public void verifyAuth(AuthResponse.AuthContext context) throws AuthException {
-
-    }
-
-    @Override
-    public PasswordVerifyReport verifyPassword(User user, AuthRequest.AuthPasswordInterface password) {
-        var request = new CabinetAuthRequest(user.getUsername(), ((AuthPlainPassword)password).password);
-        try {
-            var result = this.request.send(this.request.post("/auth/authorize", request, null), CabinetTokenResponse.class);
-            if(result.isSuccessful()) {
-                var data = result.result();
-                return new CabinetPasswordVerifyReport(data.accessToken, data.refreshToken, data.expire);
+    public AuthManager.AuthReport authorize(String login, AuthResponse.AuthContext context, AuthRequest.AuthPasswordInterface password, boolean minecraftAccess) throws IOException {
+        if(login == null) {
+            throw AuthException.userNotFound();
+        }
+        if(password == null) {
+            throw AuthException.wrongPassword();
+        }
+        CabinetAuthRequest request;
+        if(password instanceof Auth2FAPassword) {
+            AuthPlainPassword password1 = (AuthPlainPassword) ((Auth2FAPassword) password).firstPassword;
+            AuthTOTPPassword password2 = (AuthTOTPPassword) ((Auth2FAPassword) password).secondPassword;
+            request = new CabinetAuthRequest(login, password1.password, password2.totp);
+        } else if(password instanceof AuthPlainPassword) {
+            request = new CabinetAuthRequest(login, ((AuthPlainPassword) password).password, null);
+        } else {
+            throw AuthException.wrongPassword();
+        }
+        var result = this.request.send(this.request.post("/auth/authorize", request, null), CabinetTokenResponse.class);
+        if(result.isSuccessful()) {
+            var data = result.result();
+            var details = getDetailsFromToken(data.accessToken);
+            var session = details.toSession();
+            if(minecraftAccess) {
+                return AuthManager.AuthReport.ofOAuthWithMinecraft(data.accessToken, data.accessToken, data.refreshToken, data.expire, session);
             }
-        } catch (IOException e) {
-            logger.error("refreshAccessToken", e);
+            return AuthManager.AuthReport.ofOAuth(data.accessToken, data.refreshToken, data.expire, session);
+        } else if(result.error().code == 1 + 7) {
+            throw AuthException.need2FA();
+        } else {
+            throw new AuthException(result.error().error);
         }
-        return PasswordVerifyReport.FAILED;
-    }
-
-    @Override
-    public AuthManager.AuthReport createOAuthSession(User user, AuthResponse.AuthContext context, PasswordVerifyReport report1, boolean minecraftAccess) throws IOException {
-        var report = (CabinetPasswordVerifyReport) report1;
-        if(report == null) {
-            throw new UnsupportedOperationException();
-        }
-        var details = getDetailsFromToken(report.accessToken);
-        var session = new SimpleCabinetUserSession();
-        session.user = (SimpleCabinetUser) user;
-        session.id = String.valueOf(details.sessionId);
-        session.expireIn = report.expire;
-        if(minecraftAccess) {
-            return AuthManager.AuthReport.ofOAuthWithMinecraft(report.accessToken, report.accessToken, report.refreshToken, report.expire, session);
-        }
-        return AuthManager.AuthReport.ofOAuth(report.accessToken, report.refreshToken, report.expire, session);
     }
 
     @Override
@@ -188,7 +195,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
 
     }
 
-    public record CabinetAuthRequest(String username, String password) {
+    public record CabinetAuthRequest(String username, String password, String totpPassword) {
     }
 
     public record CabinetMinecraftAccessRequest(String userAccessToken) {
@@ -214,18 +221,6 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
 
         public CabinetJoinServerResponse(boolean success) {
             this.success = success;
-        }
-    }
-
-    public static class CabinetPasswordVerifyReport extends PasswordVerifyReport {
-        public String accessToken;
-        public String refreshToken;
-        public long expire;
-        public CabinetPasswordVerifyReport(String accessToken, String refreshToken, long expire) {
-            super(true);
-            this.accessToken = accessToken;
-            this.refreshToken = refreshToken;
-            this.expire = expire;
         }
     }
 
