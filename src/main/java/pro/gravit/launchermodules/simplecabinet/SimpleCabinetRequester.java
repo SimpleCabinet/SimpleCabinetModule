@@ -19,6 +19,18 @@ public class SimpleCabinetRequester {
         this.baseUrl = baseUrl;
     }
 
+    public static class CabinetOptional<T,E> extends HttpHelper.HttpOptional<T,E> {
+
+        public CabinetOptional(T result, E error, int statusCode) {
+            super(result, error, statusCode);
+        }
+
+        @Override
+        public boolean isSuccessful() {
+            return super.isSuccessful() || statusCode == 404;
+        }
+    }
+
     public static class SimpleCabinetErrorHandler<T> implements HttpHelper.HttpJsonErrorHandler<T, SimpleCabinetError> {
         private final Type type;
 
@@ -29,9 +41,9 @@ public class SimpleCabinetRequester {
         @Override
         public HttpHelper.HttpOptional<T, SimpleCabinetError> applyJson(JsonElement response, int statusCode) {
             if(statusCode < 200 || statusCode >= 300) {
-                return new HttpHelper.HttpOptional<>(null, Launcher.gsonManager.gson.fromJson(response, SimpleCabinetError.class), statusCode);
+                return new CabinetOptional<>(null, Launcher.gsonManager.gson.fromJson(response, SimpleCabinetError.class), statusCode);
             }
-            return new HttpHelper.HttpOptional<>(Launcher.gsonManager.gson.fromJson(response, type), null, statusCode);
+            return new CabinetOptional<>(Launcher.gsonManager.gson.fromJson(response, type), null, statusCode);
         }
     }
 
@@ -60,6 +72,23 @@ public class SimpleCabinetRequester {
         try {
             var requestBuilder = HttpRequest.newBuilder()
                     .method("POST", HttpRequest.BodyPublishers.ofString(Launcher.gsonManager.gson.toJson(request)))
+                    .uri(new URI(baseUrl.concat(url)))
+                    .header("Content-Type", "application/json; charset=UTF-8")
+                    .header("Accept", "application/json")
+                    .timeout(Duration.ofMillis(10000));
+            if(token != null) {
+                requestBuilder.header("Authorization", "Bearer ".concat(token));
+            }
+            return requestBuilder.build();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public <T> HttpRequest put(String url, T request, String token) {
+        try {
+            var requestBuilder = HttpRequest.newBuilder()
+                    .method("PUT", HttpRequest.BodyPublishers.ofString(Launcher.gsonManager.gson.toJson(request)))
                     .uri(new URI(baseUrl.concat(url)))
                     .header("Content-Type", "application/json; charset=UTF-8")
                     .header("Accept", "application/json")

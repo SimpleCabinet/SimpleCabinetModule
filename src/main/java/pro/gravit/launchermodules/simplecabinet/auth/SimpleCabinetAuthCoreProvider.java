@@ -17,12 +17,15 @@ import pro.gravit.launcher.request.auth.details.AuthTotpDetails;
 import pro.gravit.launcher.request.auth.password.Auth2FAPassword;
 import pro.gravit.launcher.request.auth.password.AuthPlainPassword;
 import pro.gravit.launcher.request.auth.password.AuthTOTPPassword;
+import pro.gravit.launcher.request.secure.HardwareReportRequest;
 import pro.gravit.launchermodules.simplecabinet.SimpleCabinetRequester;
 import pro.gravit.launchserver.LaunchServer;
 import pro.gravit.launchserver.auth.AuthException;
 import pro.gravit.launchserver.auth.core.AuthCoreProvider;
 import pro.gravit.launchserver.auth.core.User;
 import pro.gravit.launchserver.auth.core.UserSession;
+import pro.gravit.launchserver.auth.core.interfaces.UserHardware;
+import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportHardware;
 import pro.gravit.launchserver.auth.core.interfaces.user.UserSupportTextures;
 import pro.gravit.launchserver.helper.HttpHelper;
 import pro.gravit.launchserver.manangers.AuthManager;
@@ -42,10 +45,11 @@ import java.nio.file.Paths;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
-public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
+public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware {
     public String baseUrl;
     public String adminJwtToken;
     public String jwtPublicKeyPath;
@@ -195,18 +199,82 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
 
     }
 
-    public record CabinetAuthRequest(String username, String password, String totpPassword) {
-    }
-
-    public record CabinetMinecraftAccessRequest(String userAccessToken) {
-    }
-
-    public static final class CabinetMinecraftAccessResponse {
-        public String minecraftAccessToken;
-
-        public CabinetMinecraftAccessResponse(String minecraftAccessToken) {
-            this.minecraftAccessToken = minecraftAccessToken;
+    @Override
+    public UserHardware getHardwareInfoByPublicKey(byte[] publicKey) {
+        try {
+            return request.send(request.get(String.format("/admin/hardware/publickey/%s", Base64.getUrlEncoder().encodeToString(publicKey)), adminJwtToken), CabinetUserHardware.class).getOrThrow();
+        } catch (IOException e) {
+            logger.error("getHardwareInfoByPublicKey", e);
+            return null;
         }
+    }
+
+    @Override
+    public UserHardware getHardwareInfoByData(HardwareReportRequest.HardwareInfo info) {
+        try {
+            return request.send(request.post("/admin/hardware/search", CabinetHardwareSearchRequest.fromHardwareInfo(info), adminJwtToken), CabinetUserHardware.class).getOrThrow();
+        } catch (IOException e) {
+            logger.error("getHardwareInfoByData", e);
+            return null;
+        }
+    }
+
+    @Override
+    public UserHardware getHardwareInfoById(String id) {
+        try {
+            return request.send(request.get(String.format("/admin/hardware/id/%s", id), adminJwtToken), CabinetUserHardware.class).getOrThrow();
+        } catch (IOException e) {
+            logger.error("getHardwareInfoById", e);
+            return null;
+        }
+    }
+
+    @Override
+    public UserHardware createHardwareInfo(HardwareReportRequest.HardwareInfo info, byte[] publicKey) {
+        try {
+            return request.send(request.put("/admin/hardware/new", CabinetHardwareCreateRequest.fromHardwareInfo(info, publicKey), adminJwtToken), CabinetUserHardware.class).getOrThrow();
+        } catch (IOException e) {
+            logger.error("createHardwareInfo", e);
+            return null;
+        }
+    }
+
+    @Override
+    public void connectUserAndHardware(UserSession userSession, UserHardware hardware) {
+        var session = (SimpleCabinetUserSession) userSession;
+        var cabinetHardware = (CabinetUserHardware) hardware;
+        try {
+            request.send(request.post(String.format("/admin/session/id/%s/sethardware", session.id), new CabinetSetHardwareRequest(cabinetHardware.id), adminJwtToken), Void.class).getOrThrow();
+        } catch (IOException e) {
+            logger.error("addPublicKeyToHardwareInfo", e);
+        }
+    }
+
+    @Override
+    public void addPublicKeyToHardwareInfo(UserHardware hardware, byte[] publicKey) {
+        try {
+            request.send(request.post(String.format("/admin/hardware/id/%s/setpublickey", hardware.getId()), new CabinetSetPublicKeyRequest(publicKey), adminJwtToken), Void.class).getOrThrow();
+        } catch (IOException e) {
+            logger.error("addPublicKeyToHardwareInfo", e);
+        }
+    }
+
+    @Override
+    public Iterable<User> getUsersByHardwareInfo(UserHardware hardware) {
+        throw new UnsupportedOperationException("getUsersByHardwareInfo not implemented");
+    }
+
+    @Override
+    public void banHardware(UserHardware hardware) {
+        throw new UnsupportedOperationException("banHardware not implemented");
+    }
+
+    @Override
+    public void unbanHardware(UserHardware hardware) {
+        throw new UnsupportedOperationException("unbanHardware not implemented");
+    }
+
+    public record CabinetAuthRequest(String username, String password, String totpPassword) {
     }
 
     public record CabinetCheckServerRequest(String username, String serverID) {
@@ -214,6 +282,46 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
 
     public record CabinetJoinServerRequest(String sessionId,
                                            String serverID) {
+    }
+
+    public record CabinetHardwareCreateRequest(int bitness,
+                                        long totalMemory,
+                                        int logicalProcessors,
+                                        int physicalProcessors,
+                                        long processorMaxFreq,
+                                        boolean battery,
+                                        String hwDiskId,
+                                        String displayId,
+                                        String baseboardSerialNumber, String publicKey) {
+        public static CabinetHardwareCreateRequest fromHardwareInfo(HardwareReportRequest.HardwareInfo info, byte[] publicKey) {
+            return new CabinetHardwareCreateRequest(info.bitness, info.totalMemory, info.logicalProcessors, info.physicalProcessors,
+                    info.processorMaxFreq, info.battery, info.hwDiskId, Base64.getEncoder().encodeToString(info.displayId), info.baseboardSerialNumber,
+                    Base64.getEncoder().encodeToString(publicKey));
+        }
+    }
+
+    public record CabinetHardwareSearchRequest(int bitness,
+                                        long totalMemory,
+                                        int logicalProcessors,
+                                        int physicalProcessors,
+                                        long processorMaxFreq,
+                                        boolean battery,
+                                        String hwDiskId,
+                                        String displayId,
+                                        String baseboardSerialNumber) {
+        public static CabinetHardwareSearchRequest fromHardwareInfo(HardwareReportRequest.HardwareInfo info) {
+            return new CabinetHardwareSearchRequest(info.bitness, info.totalMemory, info.logicalProcessors, info.physicalProcessors,
+                    info.processorMaxFreq, info.battery, info.hwDiskId, Base64.getEncoder().encodeToString(info.displayId), info.baseboardSerialNumber);
+        }
+    }
+
+    public record CabinetSetPublicKeyRequest(String publicKey) {
+        public CabinetSetPublicKeyRequest(byte[] publicKey) {
+            this(Base64.getEncoder().encodeToString(publicKey));
+        }
+    }
+
+    public record CabinetSetHardwareRequest(long id) {
     }
 
     public static final class CabinetJoinServerResponse {
@@ -247,6 +355,51 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider {
             session.expireIn = expireIn;
             session.user = getUserById(id);
             return session;
+        }
+    }
+
+    public static class CabinetUserHardware implements UserHardware {
+        public long id;
+        public int bitness;
+        public long totalMemory;
+        public int logicalProcessors;
+        public int physicalProcessors;
+        public long processorMaxFreq;
+        public boolean battery;
+        public String hwDiskId;
+        public String displayId;
+        public String baseboardSerialNumber;
+        public String publicKey;
+        public boolean banned;
+
+        @Override
+        public HardwareReportRequest.HardwareInfo getHardwareInfo() {
+            var hardware = new HardwareReportRequest.HardwareInfo();
+            hardware.baseboardSerialNumber = baseboardSerialNumber;
+            hardware.battery = battery;
+            hardware.totalMemory = totalMemory;
+            hardware.logicalProcessors = logicalProcessors;
+            hardware.physicalProcessors = physicalProcessors;
+            hardware.bitness = bitness;
+            hardware.processorMaxFreq = processorMaxFreq;
+            hardware.hwDiskId = hwDiskId;
+            hardware.displayId = Base64.getDecoder().decode(displayId);
+            return hardware;
+        }
+
+        @Override
+        public byte[] getPublicKey() {
+            return Base64.getDecoder().decode(publicKey);
+        }
+
+        @Override
+        public String getId() {
+            return String.valueOf(id);
+        }
+
+        @Override
+        public boolean isBanned() {
+            return banned;
         }
     }
 
