@@ -47,6 +47,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware {
@@ -79,7 +80,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     @Override
     public User getUserByUsername(String username) {
         try {
-            return request.send(request.get(String.format("/users/name/%s", urlEncode(username)), null), SimpleCabinetUser.class).getOrThrow();
+            return request.send(request.get(String.format("/users/name/%s?assets=true", urlEncode(username)), null), SimpleCabinetUser.class).getOrThrow();
         } catch (IOException e) {
             logger.error("getUserById", e);
             return null;
@@ -89,7 +90,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     @Override
     public User getUserByUUID(UUID uuid) {
         try {
-            return request.send(request.get(String.format("/users/uuid/%s", uuid.toString()), null), SimpleCabinetUser.class).getOrThrow();
+            return request.send(request.get(String.format("/users/uuid/%s?assets=true", uuid.toString()), null), SimpleCabinetUser.class).getOrThrow();
         } catch (IOException e) {
             logger.error("getUserById", e);
             return null;
@@ -436,12 +437,17 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
 
         @Override
         public Texture getSkinTexture() {
-            return skin;
+            return assets.get("SKIN");
         }
 
         @Override
         public Texture getCloakTexture() {
-            return cloak;
+            return assets.get("CAPE");
+        }
+
+        @Override
+        public Map<String, Texture> getUserAssets() {
+            return assets;
         }
 
         public enum Gender {
@@ -449,8 +455,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         }
         public Gender gender;
         public String status;
-        public Texture skin;
-        public Texture cloak;
+        public Map<String, Texture> assets;
 
         @Override
         public String getUsername() {
@@ -495,8 +500,6 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
                     ", flags=" + flags +
                     ", gender=" + gender +
                     ", status='" + status + '\'' +
-                    ", skin=" + skin +
-                    ", cloak=" + cloak +
                     '}';
         }
     }
