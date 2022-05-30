@@ -61,7 +61,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
 
     public SimpleCabinetUser getUserById(long id) {
         try {
-            return request.send(request.get(String.format("/users/id/%d", id), null), SimpleCabinetUser.class).getOrThrow();
+            return request.send(request.get(String.format("/users/id/%d?assets=true", id), null), SimpleCabinetUser.class).getOrThrow();
         } catch (IOException e) {
             logger.error("getUserById", e);
             return null;
