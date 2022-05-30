@@ -45,10 +45,7 @@ import java.nio.file.Paths;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware {
     public String baseUrl;
@@ -432,22 +429,24 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         public String username;
         public UUID uuid;
         transient String accessToken;
-        public long permissions;
-        public long flags;
 
         @Override
         public Texture getSkinTexture() {
-            return assets.get("SKIN");
+            return assets.get("skin");
         }
 
         @Override
         public Texture getCloakTexture() {
-            return assets.get("CAPE");
+            return assets.get("cape");
         }
 
         @Override
         public Map<String, Texture> getUserAssets() {
-            return assets;
+            Map<String, Texture> result = new HashMap<>();
+            for(var e : assets.entrySet()) {
+                result.put(e.getKey().toUpperCase(Locale.ROOT), e.getValue());
+            }
+            return result;
         }
 
         public enum Gender {
@@ -479,7 +478,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
 
         @Override
         public ClientPermissions getPermissions() {
-            return new ClientPermissions(permissions, flags);
+            return new ClientPermissions();
         }
 
         public Gender getGender() {
@@ -496,8 +495,6 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
                     "id=" + id +
                     ", username='" + username + '\'' +
                     ", uuid=" + uuid +
-                    ", permissions=" + permissions +
-                    ", flags=" + flags +
                     ", gender=" + gender +
                     ", status='" + status + '\'' +
                     '}';
