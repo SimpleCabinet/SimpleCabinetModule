@@ -1,6 +1,5 @@
 package pro.gravit.launchermodules.simplecabinet.auth;
 
-import com.google.gson.JsonElement;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtParser;
@@ -8,7 +7,6 @@ import io.jsonwebtoken.Jwts;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pro.gravit.launcher.ClientPermissions;
-import pro.gravit.launcher.Launcher;
 import pro.gravit.launcher.events.request.GetAvailabilityAuthRequestEvent;
 import pro.gravit.launcher.profiles.Texture;
 import pro.gravit.launcher.request.auth.AuthRequest;
@@ -27,7 +25,6 @@ import pro.gravit.launchserver.auth.core.UserSession;
 import pro.gravit.launchserver.auth.core.interfaces.UserHardware;
 import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportHardware;
 import pro.gravit.launchserver.auth.core.interfaces.user.UserSupportTextures;
-import pro.gravit.launchserver.helper.HttpHelper;
 import pro.gravit.launchserver.manangers.AuthManager;
 import pro.gravit.launchserver.socket.Client;
 import pro.gravit.launchserver.socket.response.auth.AuthResponse;
@@ -35,17 +32,13 @@ import pro.gravit.utils.helper.IOHelper;
 import pro.gravit.utils.helper.SecurityHelper;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
-import java.time.Duration;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware {
     public String baseUrl;
@@ -474,7 +467,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         public Map<String, Texture> assets;
 
         public Map<String, String> permissions;
-        public List<String> roles;
+        public List<UserGroup> groups;
 
         @Override
         public String getUsername() {
@@ -498,7 +491,8 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
 
         @Override
         public ClientPermissions getPermissions() {
-            return new ClientPermissions(roles, new ArrayList<>(permissions.keySet()));
+            return new ClientPermissions(groups.stream().map(UserGroup::groupName).collect(Collectors.toList()),
+                    new ArrayList<>(permissions.keySet()));
         }
 
         public Gender getGender() {
@@ -519,6 +513,10 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
                     ", status='" + status + '\'' +
                     '}';
         }
+    }
+
+    public record UserGroup(long id, String groupName) {
+
     }
 
     public static class SimpleCabinetUserSession implements UserSession {
