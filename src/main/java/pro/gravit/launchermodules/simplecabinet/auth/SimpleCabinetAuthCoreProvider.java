@@ -272,6 +272,15 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         throw new UnsupportedOperationException("unbanHardware not implemented");
     }
 
+    public SimpleCabinetUser getUserByAccessToken(String accessToken) {
+        try {
+            return request.send(request.get("/auth/userinfo", accessToken), SimpleCabinetUser.class).getOrThrow();
+        } catch (IOException e) {
+            logger.error("getUserByAccessToken", e);
+            return null;
+        }
+    }
+
     public record CabinetAuthRequest(String username, String password, String totpPassword) {
     }
 
@@ -331,6 +340,8 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     }
 
     public class CabinetUserDetails {
+
+        public transient String accessToken;
         public long id;
         public String username;
         public List<String> roles;
@@ -338,7 +349,8 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         public long sessionId;
         public long expireIn;
 
-        public CabinetUserDetails(long id, String username, List<String> roles, String client, long sessionId, long expireIn) {
+        public CabinetUserDetails(String accessToken, long id, String username, List<String> roles, String client, long sessionId, long expireIn) {
+            this.accessToken = accessToken;
             this.id = id;
             this.username = username;
             this.roles = roles;
@@ -351,7 +363,12 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
             SimpleCabinetUserSession session = new SimpleCabinetUserSession();
             session.id = String.valueOf(sessionId);
             session.expireIn = expireIn;
-            session.user = getUserById(id);
+            if(accessToken != null) {
+                session.user = getUserByAccessToken(accessToken);
+            }
+            if(session.user == null) {
+                session.user = getUserById(id);
+            }
             return session;
         }
     }
@@ -421,7 +438,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         long userId = (long)(double) claims.get("id", Double.class);
         long sessionId = (long)(double) claims.get("sessionId", Double.class);
         var expire = claims.getExpiration();
-        return new CabinetUserDetails(userId, claims.getSubject(), roles, client, sessionId, expire == null ? 0 : expire.toInstant().toEpochMilli());
+        return new CabinetUserDetails(token, userId, claims.getSubject(), roles, client, sessionId, expire == null ? 0 : expire.toInstant().toEpochMilli());
     }
 
     public static class SimpleCabinetUser implements User, UserSupportTextures {
@@ -456,6 +473,9 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         public String status;
         public Map<String, Texture> assets;
 
+        public Map<String, String> permissions;
+        public List<String> roles;
+
         @Override
         public String getUsername() {
             return username;
@@ -478,7 +498,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
 
         @Override
         public ClientPermissions getPermissions() {
-            return new ClientPermissions();
+            return new ClientPermissions(roles, new ArrayList<>(permissions.keySet()));
         }
 
         public Gender getGender() {
