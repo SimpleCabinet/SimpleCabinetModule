@@ -295,7 +295,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
                                         String baseboardSerialNumber, String publicKey) {
         public static CabinetHardwareCreateRequest fromHardwareInfo(HardwareReportRequest.HardwareInfo info, byte[] publicKey) {
             return new CabinetHardwareCreateRequest(info.bitness, info.totalMemory, info.logicalProcessors, info.physicalProcessors,
-                    info.processorMaxFreq, info.battery, info.hwDiskId, Base64.getEncoder().encodeToString(info.displayId), info.baseboardSerialNumber,
+                    info.processorMaxFreq, info.battery, info.hwDiskId, info.displayId == null ? null :  Base64.getEncoder().encodeToString(info.displayId), info.baseboardSerialNumber,
                     Base64.getEncoder().encodeToString(publicKey));
         }
     }
