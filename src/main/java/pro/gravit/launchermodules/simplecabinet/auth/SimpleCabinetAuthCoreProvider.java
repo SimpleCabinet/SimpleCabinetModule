@@ -23,6 +23,7 @@ import pro.gravit.launchserver.auth.core.AuthCoreProvider;
 import pro.gravit.launchserver.auth.core.User;
 import pro.gravit.launchserver.auth.core.UserSession;
 import pro.gravit.launchserver.auth.core.interfaces.UserHardware;
+import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportAssetUpload;
 import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportHardware;
 import pro.gravit.launchserver.auth.core.interfaces.user.UserSupportTextures;
 import pro.gravit.launchserver.manangers.AuthManager;
@@ -40,7 +41,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware {
+public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware, AuthSupportAssetUpload {
     public String baseUrl;
     public String adminJwtToken;
     public String jwtPublicKeyPath;
@@ -186,7 +187,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
 
     }
 
@@ -272,6 +273,11 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
             logger.error("getUserByAccessToken", e);
             return null;
         }
+    }
+
+    @Override
+    public String getAssetUploadUrl(String name, User user) {
+        return baseUrl.concat("/cabinet/upload/".concat(name.toLowerCase(Locale.ROOT)));
     }
 
     public record CabinetAuthRequest(String username, String password, String totpPassword) {
