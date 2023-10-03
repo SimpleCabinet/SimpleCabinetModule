@@ -172,18 +172,13 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     }
 
     @Override
-    public boolean joinServer(Client client, String username, String accessToken, String serverID) throws IOException {
+    public boolean joinServer(Client client, String username, UUID uuid, String accessToken, String serverID) throws IOException {
         SimpleCabinetUser user = (SimpleCabinetUser) client.getUser();
         if(!user.getUsername().equals(username)) {
             return false;
         }
         var result = request.send(request.post("/admin/server/joinserver", new CabinetJoinServerRequest(client.sessionObject.getID(), serverID), adminJwtToken), CabinetJoinServerResponse.class).getOrThrow();
         return result.success;
-    }
-
-    @Override
-    protected boolean updateServerID(User user, String serverID) throws IOException {
-        throw new UnsupportedOperationException("Method updateServerID not supported");
     }
 
     @Override
@@ -486,16 +481,6 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         }
 
         @Override
-        public String getServerId() {
-            return null;
-        }
-
-        @Override
-        public String getAccessToken() {
-            return accessToken == null ? "ignored" : accessToken;
-        }
-
-        @Override
         public ClientPermissions getPermissions() {
             return new ClientPermissions(groups.stream().map(UserGroup::groupName).collect(Collectors.toList()),
                     new ArrayList<>(permissions.keySet()));
@@ -528,6 +513,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     public static class SimpleCabinetUserSession implements UserSession {
         public String id;
         public SimpleCabinetUser user;
+        public String accessToken;
         public long expireIn;
 
         @Override
@@ -538,6 +524,11 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         @Override
         public User getUser() {
             return user;
+        }
+
+        @Override
+        public String getMinecraftAccessToken() {
+            return "IGNORED";
         }
 
         @Override
