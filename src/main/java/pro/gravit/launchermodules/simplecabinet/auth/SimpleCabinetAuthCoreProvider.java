@@ -174,8 +174,14 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     @Override
     public boolean joinServer(Client client, String username, UUID uuid, String accessToken, String serverID) throws IOException {
         SimpleCabinetUser user = (SimpleCabinetUser) client.getUser();
-        if(!user.getUsername().equals(username)) {
-            return false;
+        if(uuid != null) {
+            if(!user.getUUID().equals(uuid)) {
+                return false;
+            }
+        } else {
+            if(!user.getUsername().equals(username)) {
+                return false;
+            }
         }
         var result = request.send(request.post("/admin/server/joinserver", new CabinetJoinServerRequest(client.sessionObject.getID(), serverID), adminJwtToken), CabinetJoinServerResponse.class).getOrThrow();
         return result.success;
