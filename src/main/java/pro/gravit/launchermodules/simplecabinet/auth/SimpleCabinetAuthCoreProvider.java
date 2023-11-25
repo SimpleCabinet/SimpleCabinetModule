@@ -94,7 +94,7 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
             CabinetUserDetails details = getDetailsFromToken(accessToken);
             var session = details.toSession();
             if(session.user == null) { // User deleted
-                throw AuthException.userNotFound();
+                throw new OAuthAccessTokenExpired();
             }
             return session;
         } catch (Exception e) {
