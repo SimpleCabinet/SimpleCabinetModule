@@ -92,7 +92,11 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     public UserSession getUserSessionByOAuthAccessToken(String accessToken) throws OAuthAccessTokenExpired {
         try {
             CabinetUserDetails details = getDetailsFromToken(accessToken);
-            return details.toSession();
+            var session = details.toSession();
+            if(session.user == null) { // User deleted
+                throw AuthException.userNotFound();
+            }
+            return session;
         } catch (Exception e) {
             if(e instanceof ExpiredJwtException) {
                 throw new OAuthAccessTokenExpired();
