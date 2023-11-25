@@ -35,6 +35,7 @@ import pro.gravit.utils.helper.SecurityHelper;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
@@ -100,6 +101,9 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         } catch (Exception e) {
             if(e instanceof ExpiredJwtException) {
                 throw new OAuthAccessTokenExpired();
+            }
+            if(e instanceof OAuthAccessTokenExpired) {
+                throw (OAuthAccessTokenExpired) e;
             }
             else {
                 logger.error("JWT error", e);
