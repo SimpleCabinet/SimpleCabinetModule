@@ -24,11 +24,14 @@ import pro.gravit.launchserver.auth.core.User;
 import pro.gravit.launchserver.auth.core.UserSession;
 import pro.gravit.launchserver.auth.core.interfaces.UserHardware;
 import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportAssetUpload;
+import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportExtendedCheckServer;
 import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportHardware;
+import pro.gravit.launchserver.auth.core.interfaces.session.UserSessionSupportHardware;
 import pro.gravit.launchserver.auth.core.interfaces.user.UserSupportTextures;
 import pro.gravit.launchserver.manangers.AuthManager;
 import pro.gravit.launchserver.socket.Client;
 import pro.gravit.launchserver.socket.response.auth.AuthResponse;
+import pro.gravit.launchserver.socket.response.auth.CheckServerResponse;
 import pro.gravit.utils.helper.IOHelper;
 import pro.gravit.utils.helper.SecurityHelper;
 
@@ -42,7 +45,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware, AuthSupportAssetUpload {
+public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware, AuthSupportAssetUpload, AuthSupportExtendedCheckServer {
     public String baseUrl;
     public String adminJwtToken;
     public String jwtPublicKeyPath;
@@ -289,6 +292,17 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         return baseUrl.concat("/cabinet/upload/".concat(name.toLowerCase(Locale.ROOT)));
     }
 
+    @Override
+    public UserSession extendedCheckServer(Client client, String username, String serverID) throws IOException {
+        var response = request.send(request.post("/admin/server/extendedcheckserver", new CabinetCheckServerRequest(username, serverID), adminJwtToken), ExtendedCheckServerResponse.class).getOrThrow();
+        var result = new SimpleCabinetUserSession();
+        result.user = response.user();
+        result.id = String.valueOf(response.session().id);
+        result.hardwareId = response.session().hardwareId();
+        result.accessToken = null;
+        return result;
+    }
+
     public record CabinetAuthRequest(String username, String password, String totpPassword) {
     }
 
@@ -426,6 +440,9 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         }
     }
 
+    public record ExtendedCheckServerResponse(SimpleCabinetUser user, SimpleCabinetSessionResponse session) {
+    }
+
     public static class CabinetTokenResponse {
         public String accessToken;
         public String refreshToken;
@@ -449,11 +466,14 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         return new CabinetUserDetails(token, userId, claims.getSubject(), roles, client, sessionId, expire == null ? 0 : expire.toInstant().toEpochMilli());
     }
 
+    public record SimpleCabinetSessionResponse(long id, String client, String createdAt, boolean hardware, Long hardwareId, boolean active) {
+
+    }
+
     public static class SimpleCabinetUser implements User, UserSupportTextures {
         public long id;
         public String username;
         public UUID uuid;
-        transient String accessToken;
 
         @Override
         public Texture getSkinTexture() {
@@ -524,11 +544,13 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
 
     }
 
-    public static class SimpleCabinetUserSession implements UserSession {
+    public class SimpleCabinetUserSession implements UserSession, UserSessionSupportHardware {
         public String id;
         public SimpleCabinetUser user;
         public String accessToken;
         public long expireIn;
+        public Long hardwareId;
+        private transient CabinetUserHardware hardware;
 
         @Override
         public String getID() {
@@ -548,6 +570,22 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         @Override
         public long getExpireIn() {
             return expireIn;
+        }
+
+        @Override
+        public String getHardwareId() {
+            return hardwareId == null ? null : String.valueOf(hardwareId);
+        }
+
+        @Override
+        public UserHardware getHardware() {
+            if(hardware == null) {
+                if(hardwareId == null) {
+                    return null;
+                }
+                hardware = (CabinetUserHardware) getHardwareInfoById(String.valueOf(hardwareId));
+            }
+            return hardware;
         }
     }
 }
