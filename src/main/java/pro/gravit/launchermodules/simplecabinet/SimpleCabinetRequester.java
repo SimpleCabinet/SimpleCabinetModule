@@ -1,7 +1,7 @@
 package pro.gravit.launchermodules.simplecabinet;
 
 import com.google.gson.JsonElement;
-import pro.gravit.launcher.Launcher;
+import pro.gravit.launcher.base.Launcher;
 import pro.gravit.launchserver.helper.HttpHelper;
 
 import java.io.IOException;

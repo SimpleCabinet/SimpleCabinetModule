@@ -2,10 +2,10 @@ package pro.gravit.launchermodules.simplecabinet;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import pro.gravit.launcher.modules.LauncherInitContext;
-import pro.gravit.launcher.modules.LauncherModule;
-import pro.gravit.launcher.modules.LauncherModuleInfo;
-import pro.gravit.launcher.modules.events.PreGsonPhase;
+import pro.gravit.launcher.base.modules.LauncherInitContext;
+import pro.gravit.launcher.base.modules.LauncherModule;
+import pro.gravit.launcher.base.modules.LauncherModuleInfo;
+import pro.gravit.launcher.base.modules.events.PreGsonPhase;
 import pro.gravit.launchermodules.simplecabinet.auth.SimpleCabinetAuthCoreProvider;
 import pro.gravit.launchermodules.simplecabinet.commands.SimpleCabinetCommand;
 import pro.gravit.launchserver.auth.AuthProviderPair;
