@@ -60,7 +60,7 @@ public class InstallCommand extends Command {
         core.baseUrl = baseUrl;
         core.adminJwtToken = token;
         core.jwtPublicKeyPath = path.toAbsolutePath().toString();
-        core.init(server);
+        core.init(server, pair);
         pair.core.close();
         pair.core = core;
         pair.textureProvider = null;

@@ -19,6 +19,7 @@ import pro.gravit.launcher.base.request.secure.HardwareReportRequest;
 import pro.gravit.launchermodules.simplecabinet.SimpleCabinetRequester;
 import pro.gravit.launchserver.LaunchServer;
 import pro.gravit.launchserver.auth.AuthException;
+import pro.gravit.launchserver.auth.AuthProviderPair;
 import pro.gravit.launchserver.auth.core.AuthCoreProvider;
 import pro.gravit.launchserver.auth.core.User;
 import pro.gravit.launchserver.auth.core.UserSession;
@@ -26,6 +27,7 @@ import pro.gravit.launchserver.auth.core.interfaces.UserHardware;
 import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportAssetUpload;
 import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportExtendedCheckServer;
 import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportHardware;
+import pro.gravit.launchserver.auth.core.interfaces.provider.AuthSupportSudo;
 import pro.gravit.launchserver.auth.core.interfaces.session.UserSessionSupportHardware;
 import pro.gravit.launchserver.auth.core.interfaces.user.UserSupportTextures;
 import pro.gravit.launchserver.manangers.AuthManager;
@@ -45,7 +47,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware, AuthSupportAssetUpload, AuthSupportExtendedCheckServer {
+public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements AuthSupportHardware, AuthSupportAssetUpload, AuthSupportExtendedCheckServer, AuthSupportSudo {
     public String baseUrl;
     public String adminJwtToken;
     public String jwtPublicKeyPath;
@@ -164,16 +166,17 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     }
 
     @Override
-    public void init(LaunchServer server) {
+    public void init(LaunchServer server, AuthProviderPair pair) {
+        super.init(server, pair);
         try {
             request = new SimpleCabinetRequester(baseUrl);
             jwtPublicKey = SecurityHelper.toPublicECDSAKey(IOHelper.read(Paths.get(jwtPublicKeyPath)));
         } catch (InvalidKeySpecException | IOException e) {
             throw new RuntimeException(e);
         }
-        parser = Jwts.parserBuilder()
+        parser = Jwts.parser()
                 .requireIssuer("SimpleCabinet")
-                .setSigningKey(jwtPublicKey)
+                .verifyWith(jwtPublicKey)
                 .build();
     }
 
@@ -303,6 +306,21 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
         return result;
     }
 
+    @Override
+    public AuthManager.AuthReport sudo(User user, boolean shadow) throws IOException {
+        SimpleCabinetUser cabinetUser = (SimpleCabinetUser) user;
+        var request = new CabinetCreateSudoSessionRequest(cabinetUser.id, "LaunchServer", shadow);
+        var result = this.request.send(this.request.post("/admin/session/sudo", request, adminJwtToken), CabinetTokenResponse.class);
+        if(result.isSuccessful()) {
+            var data = result.result();
+            var details = getDetailsFromToken(data.accessToken);
+            var session = details.toSession();
+            return AuthManager.AuthReport.ofOAuthWithMinecraft(data.accessToken, data.accessToken, data.refreshToken, data.expire, session);
+        } else {
+            throw new AuthException(result.error().error);
+        }
+    }
+
     public record CabinetAuthRequest(String username, String password, String totpPassword) {
     }
 
@@ -351,6 +369,10 @@ public class SimpleCabinetAuthCoreProvider extends AuthCoreProvider implements A
     }
 
     public record CabinetSetHardwareRequest(long id) {
+    }
+
+    public record CabinetCreateSudoSessionRequest(long userId, String client, boolean shadow) {
+
     }
 
     public static final class CabinetJoinServerResponse {
